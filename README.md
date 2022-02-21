@@ -15,7 +15,7 @@ Below are the EDA objectives:
 + Distribution of Max and Min Temperature across Cities
 + Distribution of Annual Rainfall Volume across Cities
 + Correlation between Temperature and Rainfall Volume
-+ 
+
 Through furtherdata analysis and visualization, I want to answer the following questions:
 + How did rainfall volume change over years in the 21st century?
 + How did temperature change over years in the 21st century?
