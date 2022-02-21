@@ -1,0 +1,279 @@
+---
+title: "Australia Fires and Climate Change"
+author: "Xibei Chen"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: 
+  html_document:
+    theme: "cosmo"
+    toc: true
+    #toc_depth: 2
+    #toc_float: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error=FALSE, message=FALSE, comment=NA)
+```
+
+# Introduction
+The 2019-2020 Australia fires has drawn attention of the whole world, which is the worst in Australian history. It is estimated that the fires led to the deaths of at least 33 people and over 3 billion animals. Therefore, I would like to do some analysis in this project about Australian climate change over time and recent fires . The dataset is from [TidyTudesday Project](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-01-07/readme.md). The purpose is to practice a wide variety of data visualization techniques, and gain some insights from the data. 
+
+> This work has been published [here](https://rpubs.com/xibei_chen/australia_fires) on RPubs.
+
+## Setup
+```{r}
+# Load packages necessary for the project
+if (!require("pacman")) {install.packages("pacman")}
+pacman::p_load(data.table,GGally,ggplot2,ggthemr,gganimate,ggiraph,ggmap,ggimage,magick,
+               emoGG,lubridate,stringr,tidyr,animation,dendextend,NbClust,waffle,forcats)
+```
+
+## Data Source
+There are three datasets I used for this analysis:
+
+1. `rainfall` provides everyday rainfall data including city name, date, rainfall volume, period, quality, latitude, longitude for a few main cities in Australia from 1858 to 2020. (167513 observations)
+2. `temperature` provides everyday temperature data including city name, date, maximum temperature and minimum temperature for a few main cities in Australia from 1910 to 2019. (524813 observations)
+3. `nasa_fire` provides fire data including brightness, acquisition date and time, satellite, day or night etc for every fire captured by NASA. (34270 observations)
+```{r}
+rainfall <- fread('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-07/rainfall.csv')
+temperature <- fread('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-07/temperature.csv')
+nasa_fire <- fread('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-01-07/MODIS_C6_Australia_and_New_Zealand_7d.csv')
+```
+
+## Create a custom theme
+To keep the theme of graphs and charts consistent throughout this project and to use it efficiently, I have created a customized theme using my favorite color teal.
+```{r}
+# Since teal is my favorite color, I decide to create a custom theme using this color
+theme_teal <- function (base_size = 11, base_family = "") {
+        
+        theme_minimal() %+replace% 
+                
+                theme(
+                        plot.title = element_text(family = "Times", face = "bold", 
+                                                  size = 15, color = "#407776", vjust = 2),
+                        plot.title.position = "panel",
+                        plot.subtitle = element_text(family = "sans", size = 12, color ="#60A9A8", vjust=1),
+                        plot.caption = element_text(family ="sans", color ="#60A9A8"),
+                        plot.caption.position = "panel",
+                        
+                        panel.border = element_rect(color = "#BEDADA", fill = NA),
+                        panel.background = element_rect(fill = "#BEDADA"),
+                        panel.grid.major  = element_line(color = "white"),
+                        panel.grid.minor = element_line(color = "gray95", size = 0.2),
+                        
+                        
+                        axis.line = element_line(color = "#60A9A8", size = 1),
+                        axis.ticks = element_line(color = "#60A9A8"),
+                        axis.text = element_text(family = "sans", color = "#60A9A8"),
+                        axis.title = element_text(family = "sans", face = "bold", color = "#4F9291"),
+                        
+                        
+                        legend.title = element_text(family = "Times", size = 12, 
+                                                    face = "bold", color = "#4F9291"),
+                        legend.text = element_text(family = "sans", size = 9, color = "#407776"),
+                        
+                        strip.text = element_text(colour = '#407776', vjust=1)
+                )
+}
+```
+
+
+# Climate Change Analysis
+To prepare for further analysis, first I did some data wrangling to merge temperature and rainfall Data.
+```{r}
+# Prepare temperature data table
+# Create separate new columns for year, month day
+temperature[, ':='(year=year(ymd(date)), month=month(ymd(date)), day=day(ymd(date)))]
+# Change Kent to Adelaide and only capitalize first letter to be consistent with other dataset
+temperature[city_name == "KENT", city_name := "ADELAIDE"]
+temperature[, city_name := str_to_title(city_name)]
+# Filter non-NA temperature rows and select needed columns
+temperature <- temperature[!is.na(temperature), .(city_name, year, month, day, temperature, temp_type)]
+
+# Prepare rainfall data table
+# Filter non-NA rainfall rows and select needed columns
+rainfall <- rainfall[!is.na(rainfall), .(city_name, year, month, day, rainfall, period, quality, lat, long)]
+
+# Merge temperature and rainfall
+df <- merge(temperature, rainfall, by = c('city_name', 'year', 'month', 'day'))
+```
+
+## Exploratory Data Analysis
+
+### Distribution of Max and Min Temperature
+```{r, fig.align='center'}
+df1<- df[, .(avg_temp = mean(temperature, na.rm=T)), by=.(city_name,temp_type)]
+
+ggplot(df1, aes(x=fct_reorder(city_name,-avg_temp), y=avg_temp, fill=temp_type))+
+        geom_bar(stat="identity",position="dodge")+
+        labs(x="City Name", y="Temperature in Celsius",
+             title="Average Max and Min Temperature (°C) 1910-2019 ",
+             subtitle="Brisbane, Sydney and Perth are the top 3 warmest cities.")+
+        theme_teal()+
+        theme(legend.title=element_blank())
+```
+
+### Distribution of Annual Rainfall Volume
+```{r, fig.align='center'}
+df2<- df[, .(annual_rainfall = sum(rainfall)), by=.(year, city_name)][,.(avg_annual_rainfall = mean(annual_rainfall, na.rm=T)), by=city_name]
+
+ggplot(df2, aes(x=fct_reorder(city_name,-avg_annual_rainfall), y=avg_annual_rainfall))+
+        geom_bar(stat="identity",position="dodge", fill="#0a9396")+
+        labs(x="City Name", y="Average ",
+             title="Average Annual Rainfall Volume (mm) 1910-2019",
+             subtitle="Brisbane, Sydney and Perth are the top 3 rainiest cities.")+
+        theme_teal()+
+        theme(legend.title=element_blank())
+```
+
+### Correlation between Temperature and Rainfall Volume
+As we have seen in the previous EDA, Brisbane, Sydney and Perth are both the top 3 warmest and the top 3 rainiest cities among main Australian cities. I would like to find out if there is a correlation between temperature and rainfall.
+```{r, fig.align='center'}
+df3 <- df[, .(annual_rainfall = sum(rainfall), avg_temp =mean(temperature, na.rm=T)), by=.(year, city_name, temp_type)]
+ggplot(df3, aes(x=annual_rainfall, y=avg_temp, color=temp_type))+
+        geom_point()+
+        geom_smooth(method='loess')+
+        labs(x="Average Annual Rainfall Volume (mm)", y="Average Temperature (°C)",
+             title="Correlation between Temperature and Rainfall Volume ")+
+        theme_teal()+
+        theme(legend.title=element_blank())
+
+```
+As we can see from the above graph, in general average temperature tends to decline when annual rainfall volume is low. However, after around 500mm annual rainfall volume, temperature and rainfall tend to have a positive correlation.
+
+## Q1: How did rainfall volume change over years in the 21st century?
+```{r, fig.align='center'}
+p1<- ggplot(df3[year>=2000], aes(x = year, y = annual_rainfall)) +
+        geom_line(aes(color=city_name)) +
+        labs( x='Year', y='Rainfall Volume', title = 'Annual Rainfall Volume for Different Cities') +
+        facet_wrap(~city_name)+
+        theme_teal()+
+        theme(legend.position = "none")
+
+#p1 + transition_reveal(year)
+
+# Save gif to save time for knitting html
+#anim_save('/Users/xibei/Documents/2021CEU/DV2/rainfall_21st.gif')
+
+# Import gif
+knitr::include_graphics("/Users/xibei/Documents/2021CEU/DV2/rainfall_21st.gif")
+```
+
+From the animated line chart, we can tell rainfall volume has been stable with slight fluctuations over years in general, except there is a very obvious peak in Brisbane in 2010. However, there seems to be a drop after 2015 in all main Australian cities. So I decided to zoom in to see the distributions of rainfall volume after 2015.
+```{r, fig.align='center'}
+interactive_boxplot <- ggplot(df3[year>=2015], aes(x = factor(year), y = annual_rainfall)) +
+        geom_boxplot()+
+        geom_jitter_interactive(aes(tooltip = city_name, data_id = year, color=factor(year)), width = 0.55, height = 1, alpha = 0.25)+
+        labs(x = 'Year', y = 'Annual Rainfall Volume', title = 'Distribution of Annual Rainfall over Recent Years', 
+        subtitle='(Interactive Tooltip for City Name)')+
+        theme_teal()+
+        theme(legend.position = "none")
+        
+# Show the boxplot
+girafe(ggobj = interactive_boxplot,
+       options = list(opts_hover_inv(css = "opacity:0.1;"), opts_sizing(rescale = TRUE, width=0.8) ))
+```
+
+
+Usually the median rainfall volume across cities is above 500mm. However, in 2019 the median rainfall volume is around 200mm. So indeed, there is a drastic drop at rainfall volume in 2019 compared to previous years. 
+
+## Q2: How did temperature change over years in the 21st century?
+```{r, fig.align='center'}
+ggplot(df3[year>=2000], aes(x = year, y = avg_temp, color=temp_type)) +
+        geom_point( alpha = 0.5) +
+        geom_smooth(method = 'loess') +
+        facet_wrap(~city_name)+
+        labs( x='Year', 
+              y='Average Daily Max Temp', 
+              title = 'Average Max and Min Temperature for Different Cities')+
+        theme_teal()+
+        theme(legend.title=element_blank())
+```
+There is a trend that the temperature has been increasing gradually over years in the 21st century for all the main Australian cities. And we can find that for all the cities the last year namely 2019, the temperature is obviously above the Lowess smoothing line which indicates that the temperature is significantly higher than previous year.
+
+# Explore Animated Clustering 
+I have also tried to put the techniques of clustering into practice in this project.
+```{r, fig.align='center'}
+# Long format to wide format for max and min temp
+df <- spread(df, key=temp_type, value=temperature)
+cluster_df <- df[, c('city_name', 'rainfall', 'max', 'min')]
+cluster_df <- cluster_df[complete.cases(cluster_df), ]
+set.seed(369)
+cluster_df <- cluster_df[sample(nrow(cluster_df), 2000), ]
+
+# Check distributions
+# #ggplot(cluster_df, aes(x=rainfall, y=max))+
+#         geom_point()
+
+# Get rid of extreme values of rainfall (above 50) for better visual of clustering
+cluster_df <- cluster_df[rainfall<=50]
+
+hc <- hclust(dist(cluster_df[, 2:4]))
+#plot(hc)
+
+d <- as.dendrogram(hc)
+d <- color_branches(d, k = 2)
+#plot(d)
+#ggplot(d)
+
+#NbClust(as.matrix(cluster_df[, 2:4]), method = 'complete', index = 'all')
+# According to the recommendation of NbClust package, the best number of clusters is determined to be 3 
+
+clusters <- cutree(hc, 3)
+cluster_df$cluster <- factor(clusters)
+# ggplot(cluster_df, aes(rainfall, max, color = factor(clusters))) +
+#          geom_point(size = 3) +
+#          geom_smooth(method = 'lm') +
+#          transition_states(city_name) +
+#          labs(   colour = "Clusters",
+#                  title = paste("{closest_state}"), 
+#                 subtitle = 'Number of rainfalls: {nrow(subset(cluster_df, city_name == closest_state))}')+
+#          theme_teal()
+
+# Save the animation
+#anim_save('clustering.gif')
+
+# Import gif
+knitr::include_graphics("/Users/xibei/Documents/2021CEU/DV2/clustering.gif")
+```
+The NbClust package helped me determine the best number of clusters to be 3. And we can see that out of the 6 cities, the clustering animation showed us that Sydney and Brisbane have more observations with blue points in the 3rd cluster. The method of clustering can help us better identify the similarity between cities. And we can see that this cluster covers observations above rainfall above 15mm, therefore we can get an idea that Sydney and Brisbane are the top 2 cities with the highest rainfall volume, which is in accordance with the result of EDA earlier.
+
+# Create Animated Australia Fire Map
+```{r, fig.align = 'center'}
+# Get Australia map
+bbox <- c(left = 110, bottom = -45, right = 160, top = -10)
+map_background <- get_stamenmap(bbox, zoom = 5, maptype = c("watercolor"))
+map_labels  <- get_stamenmap(bbox, zoom = 5, maptype = c("terrain-labels"))
+map <- ggmap(map_background) + inset_ggmap(map_labels)
+
+# Save gif: Australia fire map animation according to nasa data
+# saveGIF({
+#         for (i in 1: length(unique(nasa_fire$acq_date))) {
+#                 
+#                 print(map + 
+#                               geom_emoji(data = nasa_fire[acq_date==unique(nasa_fire$acq_date)[i]], 
+#                                          aes(longitude, latitude), emoji="1f525")+
+#                               theme(legend.position = 'none',
+#                                     axis.title = element_blank(),
+#                                     axis.text =element_blank(),
+#                                     axis.ticks =element_blank()))
+#                 
+#         }
+# }, movie.name = "australia_fire.gif", 
+# interval = 1, 
+# ani.width = 800, 
+# ani.height = 800,
+# outdir = getwd())
+
+# Import gif
+knitr::include_graphics("/Users/xibei/Documents/2021CEU/DV2/australia_fire.gif")
+```
+Using NASA fire data between 2019-12-29 and 2020-01-05, I created this animated map to show that how large the scope of Australia fires is. We can clearly see that the fires happened almost all over Australia non-stop from end 2019 to beginning 2020, which is devastating. And this disaster is highly likely to be the result of extremely warm and dry weather. 
+
+# Conclusion
+
+As stated in the [New York times article](https://www.nytimes.com/interactive/2020/01/02/climate/australia-fires-map.html):
+
+> “[Crystal A. Kolden, a wildfire researcher (formerly) at the University of Idaho] says the combination of extremely dry and extremely hot conditions adds up to more powerful fires.”
+
+From the above analysis, we do see that there was an increasing trend in temperature and a drastic drop in rainfall volume across all the main Australian cities in 2019. And the correlation of extreme weather and fire occurrence is alleged to be positive. Therefore, I hope the heart-rending fire disaster would raise people's awareness of the recent extreme weather. To protect our planet and all the beautiful creatures on this land from climate disasters like wildfire, we should do our best to reduce carbon footprint to better tackle climate change.
