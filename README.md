@@ -19,3 +19,7 @@ Below are the EDA objectives:
 Through furtherdata analysis and visualization, I want to answer the following questions:
 + How did rainfall volume change over years in the 21st century?
 + How did temperature change over years in the 21st century?
+
+## Conclusion
+As stated in the [New York times article](https://www.nytimes.com/interactive/2020/01/02/climate/australia-fires-map.html):
+>“[Crystal A. Kolden, a wildfire researcher (formerly) at the University of Idaho] says the combination of extremely dry and extremely hot conditions adds up to more powerful fires.”
