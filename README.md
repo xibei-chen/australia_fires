@@ -8,9 +8,9 @@ You can read more details about how the script works in this [document](https://
 ## Data Source
 There are three datasets I used for this analysis:
 
-rainfall provides everyday rainfall data including city name, date, rainfall volume, period, quality, latitude, longitude for a few main cities in Australia from 1858 to 2020. (167513 observations)
-temperature provides everyday temperature data including city name, date, maximum temperature and minimum temperature for a few main cities in Australia from 1910 to 2019. (524813 observations)
-nasa_fire provides fire data including brightness, acquisition date and time, satellite, day or night etc for every fire captured by NASA. (34270 observations)
++ `rainfall` provides everyday rainfall data including city name, date, rainfall volume, period, quality, latitude, longitude for a few main cities in Australia from 1858 to 2020. (167513 observations)
++ `temperature` provides everyday temperature data including city name, date, maximum temperature and minimum temperature for a few main cities in Australia from 1910 to 2019. (524813 observations)
++ `nasa_fire` provides fire data including brightness, acquisition date and time, satellite, day or night etc for every fire captured by NASA. (34270 observations)
 
 ## Climate Change Analysis
 Below are the EDA objectives:
